@@ -89,6 +89,12 @@ function displayExplanation(explanation) {
       parsedExplanation = JSON.parse(explanation);
     }
 
+    // Check if this is an error response
+    if (parsedExplanation && parsedExplanation.error) {
+      displayEmptyState("explanation", parsedExplanation.message || "An error occurred");
+      return;
+    }
+
     if (!parsedExplanation || !parsedExplanation.sections) {
       displayEmptyState("explanation", "Invalid explanation format");
       return;
@@ -98,7 +104,12 @@ function displayExplanation(explanation) {
     explanationDiv.innerHTML = html;
   } catch (error) {
     console.error("Error displaying explanation:", error);
-    displayEmptyState("explanation", "Error displaying explanation");
+    // If JSON parsing fails, treat the explanation as an error message
+    if (typeof explanation === "string" && explanation.includes("Error:")) {
+      displayEmptyState("explanation", explanation);
+    } else {
+      displayEmptyState("explanation", "Error displaying explanation");
+    }
   }
 }
 

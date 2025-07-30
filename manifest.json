@@ -4,7 +4,11 @@
   "version": "1.0",
   "description": "A browser extension that helps you extract and analyze code changes from pull requests",
   "permissions": ["activeTab", "scripting", "storage", "tabs"],
-  "host_permissions": ["https://dev.azure.com/*", "https://github.com/*"],
+  "host_permissions": [
+    "https://dev.azure.com/*",
+    "https://github.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -29,7 +33,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["results.html"],
+      "resources": ["results.html", ".env"],
       "matches": ["https://dev.azure.com/*", "https://github.com/*"]
     }
   ]

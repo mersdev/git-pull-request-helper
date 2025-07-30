@@ -14,7 +14,7 @@ const ERROR_MESSAGES = {
 
 const GEMINI_CONFIG = {
   BASE_URL:
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
   PROMPT_TEMPLATE: (
     changes
   ) => `You are a code review assistant. Please analyze the following code changes and provide a response in valid JSON format with exactly these fields:
@@ -53,10 +53,31 @@ ${changes}`,
 // Global variable to store API key
 let GEMINI_API_KEY = null;
 
+// Test function to validate API key on extension startup
+async function validateApiKey() {
+  try {
+    await loadApiKey();
+    console.log("API key loaded successfully");
+
+    // Test with a simple request
+    await testGeminiAvailability();
+    console.log("Gemini API is available and working");
+    return true;
+  } catch (error) {
+    console.error("API validation failed:", error);
+    return false;
+  }
+}
+
 // Function to load API key from .env file
 async function loadApiKey() {
   try {
     const response = await fetch(chrome.runtime.getURL(".env"));
+
+    if (!response.ok) {
+      throw new Error(`Failed to load .env file: ${response.status} ${response.statusText}`);
+    }
+
     const text = await response.text();
     const envVars = text.split("\n").reduce((acc, line) => {
       const [key, value] = line.split("=");
@@ -64,11 +85,15 @@ async function loadApiKey() {
     }, {});
 
     GEMINI_API_KEY = envVars.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not found");
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === "your_gemini_api_key_here") {
+      throw new Error("GEMINI_API_KEY not found or not configured in .env file");
+    }
+
+    console.log("API key loaded successfully");
     return GEMINI_API_KEY;
   } catch (error) {
     console.error("Error loading API key:", error);
-    throw error;
+    throw new Error(`Failed to load API key: ${error.message}`);
   }
 }
 
@@ -77,10 +102,13 @@ async function testGeminiAvailability() {
   if (!GEMINI_API_KEY) await loadApiKey();
 
   const response = await fetch(
-    `${GEMINI_CONFIG.BASE_URL}?key=${GEMINI_API_KEY}`,
+    GEMINI_CONFIG.BASE_URL,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: "Hi" }] }],
       }),
@@ -88,7 +116,24 @@ async function testGeminiAvailability() {
   );
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const errorText = await response.text();
+    console.error(`API Error ${response.status}:`, errorText);
+
+    // Handle specific error codes
+    switch (response.status) {
+      case 400:
+        throw new Error("Invalid API request. Please check your configuration.");
+      case 401:
+        throw new Error("Invalid API key. Please check your Gemini API key.");
+      case 403:
+        throw new Error("API access forbidden. Please check your API key permissions.");
+      case 429:
+        throw new Error("Rate limit exceeded. Please try again later.");
+      case 503:
+        throw new Error("Gemini API service temporarily unavailable. Please try again later.");
+      default:
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
   }
 
   return true;
@@ -111,16 +156,24 @@ function formatChanges(changes) {
 
 // Function to get code review from Gemini
 async function getCodeReview(changes) {
-  await testGeminiAvailability();
+  try {
+    await testGeminiAvailability();
+  } catch (error) {
+    console.error("Gemini API availability test failed:", error);
+    throw error;
+  }
 
   const formattedChanges = formatChanges(changes);
   const prompt = GEMINI_CONFIG.PROMPT_TEMPLATE(formattedChanges);
 
   const response = await fetch(
-    `${GEMINI_CONFIG.BASE_URL}?key=${GEMINI_API_KEY}`,
+    GEMINI_CONFIG.BASE_URL,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
@@ -132,7 +185,26 @@ async function getCodeReview(changes) {
     }
   );
 
-  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`API Error ${response.status}:`, errorText);
+
+    // Handle specific error codes
+    switch (response.status) {
+      case 400:
+        throw new Error("Invalid API request. Please check your configuration.");
+      case 401:
+        throw new Error("Invalid API key. Please check your Gemini API key.");
+      case 403:
+        throw new Error("API access forbidden. Please check your API key permissions.");
+      case 429:
+        throw new Error("Rate limit exceeded. Please try again later.");
+      case 503:
+        throw new Error("Gemini API service temporarily unavailable. Please try again later.");
+      default:
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+  }
 
   const data = await response.json();
   if (data.error) throw new Error(data.error.message || "Unknown error");
@@ -303,11 +375,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "EXPLAIN_CHANGES") {
     getCodeReview(message.changes)
       .then((explanation) => {
-        // Send explanation to popup
-        chrome.tabs.sendMessage(sender.tab.id, {
-          type: "EXPLANATION_RESULT",
-          explanation: JSON.stringify(explanation),
-        });
+        // Send explanation to popup with error handling
+        try {
+          chrome.tabs.sendMessage(sender.tab.id, {
+            type: "EXPLANATION_RESULT",
+            success: true,
+            explanation: JSON.stringify(explanation),
+          });
+        } catch (connectionError) {
+          console.error("Failed to send message to tab:", connectionError);
+        }
 
         // Update overview tab
         updateOverviewTab(sender.tab.id, explanation).catch((error) => {
@@ -316,18 +393,53 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch((error) => {
         console.error("Error:", error);
-        const errorMessage =
-          Object.values(ERROR_MESSAGES).find((msg) =>
-            error.message.includes(msg)
-          ) || ERROR_MESSAGES.UNEXPECTED_ERROR;
 
-        chrome.tabs.sendMessage(sender.tab.id, {
-          type: "EXPLANATION_RESULT",
-          explanation: errorMessage,
-        });
+        // Send error message in consistent format with error handling
+        try {
+          chrome.tabs.sendMessage(sender.tab.id, {
+            type: "EXPLANATION_RESULT",
+            success: false,
+            explanation: JSON.stringify({
+              error: true,
+              message: error.message || ERROR_MESSAGES.UNEXPECTED_ERROR
+            }),
+          });
+        } catch (connectionError) {
+          console.error("Failed to send error message to tab:", connectionError);
+        }
       });
   } else if (message.type === "EXPLANATION_TO_POPUP") {
-    chrome.runtime.sendMessage(message);
+    try {
+      chrome.runtime.sendMessage(message);
+    } catch (connectionError) {
+      console.error("Failed to forward message to popup:", connectionError);
+    }
   }
   return true;
+});
+
+// Validate API key when extension starts
+chrome.runtime.onStartup.addListener(() => {
+  validateApiKey();
+});
+
+// Also validate when extension is installed
+chrome.runtime.onInstalled.addListener(() => {
+  // Clear any cached error data
+  chrome.storage.local.clear();
+  validateApiKey();
+});
+
+// Add a message handler for manual API testing
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "TEST_API") {
+    testGeminiAvailability()
+      .then(() => {
+        sendResponse({ success: true, message: "API is working correctly" });
+      })
+      .catch((error) => {
+        sendResponse({ success: false, message: error.message });
+      });
+    return true; // Keep the message channel open for async response
+  }
 });

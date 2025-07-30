@@ -220,6 +220,15 @@ function handleIncomingMessages(message) {
     !isTabOpening
   ) {
     try {
+      console.log("Popup received EXPLANATION_TO_POPUP:", message);
+
+      // Check if this is an error response
+      if (message.success === false) {
+        showStatus("❌ Failed to generate explanation. Please try again.", true);
+        resetExtractButton(extractButton);
+        return;
+      }
+
       // First, check if we have all the necessary data
       chrome.storage.local.get(["fileChanges"], async (data) => {
         if (!data.fileChanges) {
@@ -337,11 +346,47 @@ async function updatePlatformStatus() {
 
 document.addEventListener("DOMContentLoaded", () => {
   const extractButton = document.getElementById("extractButton");
+  const testApiButton = document.getElementById("testApiButton");
+
   extractButton.addEventListener("click", handleExtraction);
+  testApiButton.addEventListener("click", handleApiTest);
   isTabOpening = false; // Reset flag when popup opens
 
   // Add platform status check
   updatePlatformStatus();
 });
+
+// Function to test API connection
+async function handleApiTest() {
+  const testApiButton = document.getElementById("testApiButton");
+  const originalText = testApiButton.textContent;
+
+  testApiButton.textContent = "🔄 Testing...";
+  testApiButton.disabled = true;
+  showStatus("🔧 Testing Gemini API connection...");
+
+  try {
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: "TEST_API" }, resolve);
+    });
+
+    if (response.success) {
+      showStatus("✅ API connection successful!");
+      testApiButton.textContent = "✅ API Working";
+    } else {
+      showStatus(`❌ API test failed: ${response.message}`, true);
+      testApiButton.textContent = "❌ API Failed";
+    }
+  } catch (error) {
+    showStatus(`❌ API test error: ${error.message}`, true);
+    testApiButton.textContent = "❌ Test Error";
+  }
+
+  setTimeout(() => {
+    testApiButton.textContent = originalText;
+    testApiButton.disabled = false;
+    hideStatus();
+  }, 3000);
+}
 
 chrome.runtime.onMessage.addListener(handleIncomingMessages);

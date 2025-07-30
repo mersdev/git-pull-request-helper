@@ -47,12 +47,19 @@ function forwardFileChanges(fileNameAndCodes) {
 // Listen for explanation results from background script
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "EXPLANATION_RESULT") {
-    // Forward the explanation to the popup
-    chrome.runtime.sendMessage({
-      type: "EXPLANATION_TO_POPUP",
-      explanation: message.explanation,
-      platform: detectPlatform(),
-    });
+    console.log("Content script received EXPLANATION_RESULT:", message);
+
+    // Forward the explanation to the popup with error handling
+    try {
+      chrome.runtime.sendMessage({
+        type: "EXPLANATION_TO_POPUP",
+        explanation: message.explanation,
+        success: message.success,
+        platform: detectPlatform(),
+      });
+    } catch (error) {
+      console.error("Failed to forward explanation to popup:", error);
+    }
   }
 });
 

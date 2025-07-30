@@ -122,6 +122,34 @@ body {
   transform: translateY(-1px);
 }
 
+.secondary-button {
+  background: var(--mb-gray-100);
+  color: var(--mb-gray-700);
+  border: 1px solid var(--mb-gray-300);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.secondary-button:hover {
+  background: var(--mb-gray-200);
+  border-color: var(--mb-gray-400);
+  transform: translateY(-1px);
+}
+
+.secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Section Card Styles */
 .section-card {
   background: var(--mb-white);

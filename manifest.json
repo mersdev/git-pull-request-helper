@@ -33,7 +33,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["results.html", ".env"],
+      "resources": ["results.html"],
       "matches": ["https://dev.azure.com/*", "https://github.com/*"]
     }
   ]

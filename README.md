@@ -95,6 +95,14 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 ```
 
+## Test Your Gemini API Key (CLI)
+
+If you want to quickly verify your `GEMINI_API_KEY` from the terminal (with basic HTTP 429 retry/backoff):
+
+```bash
+node ./bin/test-gemini.js
+```
+
 ## Usage
 
 1. Navigate to a pull request on GitHub or Azure DevOps
